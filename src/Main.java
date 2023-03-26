@@ -7,53 +7,49 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public class Main {
     public static void main(String[] args) throws InterruptedException {
-        BlockingQueue<String> aHandler = new ArrayBlockingQueue(10);
-        BlockingQueue<String> bHandler = new ArrayBlockingQueue(10);
-        BlockingQueue<String> cHandler = new ArrayBlockingQueue(10);
+        BlockingQueue<String> aHandler = new ArrayBlockingQueue(100);
+        BlockingQueue<String> bHandler = new ArrayBlockingQueue(100);
+        BlockingQueue<String> cHandler = new ArrayBlockingQueue(100);
 
-        AtomicReference<String> textWithMaxA = new AtomicReference<>("");
-        AtomicReference<String> textWithMaxB = new AtomicReference<>("");
-        AtomicReference<String> textWithMaxC = new AtomicReference<>("");
-
-        List<Thread> threads = new ArrayList<>();
-
-        Runnable fillQuequeues = () -> {
-            for (int i = 0; i < 20; i++) {
+        Thread generateTexts = new Thread(() -> {
+            for (int i = 0; i < 10000; i++) {
                 try {
-                    String s = generateText("abc", 10);
+                    String s = generateText("abc", 100000);
                     aHandler.put(s);
                     bHandler.put(s);
                     cHandler.put(s);
                 } catch (InterruptedException e) {
-                    return;
+                    throw new RuntimeException(e);
                 }
             }
-        };
-        Thread generateTexts = new Thread(fillQuequeues);
-        Runnable chechMaxA = () -> textWithMaxA.set(handleQueue('a', aHandler));
-        Thread checkA = new Thread(chechMaxA);
-        Runnable chechMaxB = () -> textWithMaxB.set(handleQueue('b', bHandler));
-        Thread checkB = new Thread(chechMaxB);
-        Runnable chechMaxC = () -> textWithMaxC.set(handleQueue('c', cHandler));
-        Thread checkC = new Thread(chechMaxC);
-
-        threads.add(generateTexts);
-        threads.add(checkA);
-        threads.add(checkB);
-        threads.add(checkC);
-
+        });
         generateTexts.start();
+
+        Thread checkA = new Thread(() -> {
+            char letter = 'a';
+            int maxA = getMaxCharCount(letter, aHandler);
+            System.out.println("Максимальное кол-во символов '" + letter + "' во всех текстах: " + maxA);
+        });
         checkA.start();
+
+        Thread checkB = new Thread(() -> {
+            char letter = 'b';
+            int maxB = getMaxCharCount(letter, bHandler);
+            System.out.println("Максимальное кол-во символов '" + letter + "' во всех текстах: " + maxB);
+        });
         checkB.start();
+
+        Thread checkC = new Thread(() -> {
+            char letter = 'c';
+            int maxC = getMaxCharCount(letter, cHandler);
+            System.out.println("Максимальное кол-во символов '" + letter + "' во всех текстах: " + maxC);
+        });
         checkC.start();
 
-        for (Thread thread : threads) {
-            thread.join();
-        }
 
-        System.out.println("Текст с максимальным кол-вом символов 'a': " + textWithMaxA.get());
-        System.out.println("Текст с максимальным кол-вом символов 'b': " + textWithMaxB.get());
-        System.out.println("Текст с максимальным кол-вом символов 'c': " + textWithMaxC.get());
+        checkA.join();
+        checkB.join();
+        checkC.join();
     }
 
     public static String generateText(String letters, int length) {
@@ -65,36 +61,23 @@ public class Main {
         return text.toString();
     }
 
-    public static int getMaxCharCount(char symbol, String text) {
-        int maxCharCount = 0;
-
-        for (char c : text.toCharArray()) {
-            if (c == symbol) {
-                maxCharCount++;
-            }
-        }
-
-        return maxCharCount;
-    }
-
-    public static String handleQueue(char symbol, BlockingQueue<String> queue) {
-        int oldMaxCountA = 0;
-        String result = "";
-        for (int i = 0; i < 10; i++) {
-            int newMaxACount;
-            try {
-                String s = queue.take();
-                newMaxACount = getMaxCharCount(symbol, s);
-
-                if (newMaxACount > oldMaxCountA) {
-                    oldMaxCountA = newMaxACount;
-                    result = s;
+    public static int getMaxCharCount(char symbol, BlockingQueue<String> queue) {
+        int count = 0;
+        int max = 0;
+        String text;
+        try {
+            for (int i = 0; i < 10000; i++) {
+                text = queue.take();
+                for (char c : text.toCharArray()) {
+                    if (c == symbol) count++;
                 }
-            } catch (InterruptedException e) {
-                return result;
+                if (count > max) max = count;
+                count = 0;
             }
+        } catch (InterruptedException e) {
+            System.out.println(Thread.currentThread().getName() + " было прервано");
+            return -1;
         }
-
-        return result;
+        return max;
     }
 }
